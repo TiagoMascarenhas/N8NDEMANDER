@@ -1,0 +1,109 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "buscar-produtos",
+        "options": {}
+      },
+      "id": "1af09ea8-fcbb-4a98-a18a-1366744fa21d",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1088,
+        -208
+      ],
+      "webhookId": "your-webhook-id"
+    },
+    {
+      "parameters": {
+        "url": "https://cdn-demander.s3.sa-east-1.amazonaws.com/processo-seletivo/exemplo-de-produtos.json",
+        "options": {}
+      },
+      "id": "aa28dd4f-86f7-41ce-a809-cb3b92331dd1",
+      "name": "Buscar API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -880,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dados do webhook\nconst webhookData = $('Webhook').first().json;\nconst busca = webhookData.body || webhookData;\n\n// Dados da API - FORÇAR COMO ARRAY\nconst apiData = $('Buscar API').first().json;\nlet todosProdutos = [];\n\n// Log para debug\nconsole.log('Tipo de dados da API:', typeof apiData);\nconsole.log('É array?', Array.isArray(apiData));\n\nif (Array.isArray(apiData)) {\n  todosProdutos = apiData;\n} else if (apiData && typeof apiData === 'object') {\n  // Se for um objeto, pode ter os produtos em alguma propriedade\n  const keys = Object.keys(apiData);\n  console.log('Chaves do objeto:', keys);\n  \n  // Procurar por uma propriedade que seja array\n  for (const key of keys) {\n    if (Array.isArray(apiData[key])) {\n      todosProdutos = apiData[key];\n      console.log(`Produtos encontrados na propriedade '${key}':`, todosProdutos.length);\n      break;\n    }\n  }\n  \n  // Se não encontrou array, tratar como produto único\n  if (todosProdutos.length === 0 && (apiData.codigo || apiData.descricao)) {\n    todosProdutos = [apiData];\n  }\n}\n\nconsole.log('Total de produtos processados:', todosProdutos.length);\n\n// Se ainda não temos produtos, algo está errado\nif (todosProdutos.length === 0) {\n  return [{\n    json: {\n      erro: true,\n      mensagem: 'Não foi possível processar os produtos da API',\n      api_data_type: typeof apiData,\n      api_data: apiData,\n      debug: true\n    }\n  }];\n}\n\n// Fazer a busca\nlet produtosFiltrados = [];\n\nif (busca.produto || busca.codigo || busca.descricao || busca.codigoBarras) {\n  const termoBusca = (busca.produto || busca.descricao || '').toLowerCase().trim();\n  const codigoBusca = (busca.codigo || busca.codigoBarras || '').toString();\n  \n  produtosFiltrados = todosProdutos.filter(produto => {\n    if (!produto) return false;\n    \n    // Busca por código\n    if (codigoBusca && (produto.codigo === codigoBusca || produto.codigoBarras === codigoBusca)) {\n      return true;\n    }\n    \n    // Busca por descrição\n    if (termoBusca && produto.descricao && produto.descricao.toLowerCase().includes(termoBusca)) {\n      return true;\n    }\n    \n    return false;\n  });\n} else {\n  // Se não tem critério, retorna os primeiros 10\n  produtosFiltrados = todosProdutos.slice(0, 10);\n}\n\nconst resultado = {\n  sucesso: true,\n  total_produtos_api: todosProdutos.length,\n  total_encontrados: produtosFiltrados.length,\n  criterios_busca: busca,\n  produtos: produtosFiltrados\n};\n\nreturn [{ json: resultado }];"
+      },
+      "id": "cb30de29-9a00-48e1-b4a0-e14a8d4199e2",
+      "name": "Processar Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "19293626-8c41-4cbb-9219-3a815f83b227",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Buscar API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar API": {
+      "main": [
+        [
+          {
+            "node": "Processar Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Final": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "13541327-839f-40b6-94d9-d25a300783b4",
+  "meta": {
+    "instanceId": "6073e951632a136c040206a202b40489b79cd18ee36d16c569c142c4a26c8867"
+  },
+  "id": "ALhEVZn5HwdnKH5E",
+  "tags": []
+}

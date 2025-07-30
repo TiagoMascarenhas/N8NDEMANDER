@@ -1,0 +1,248 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "buscar-produtos",
+        "options": {}
+      },
+      "id": "c5c9772c-f238-4322-8b74-cd4f56815cbb",
+      "name": "Webhook - Receber Dados",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        1072
+      ],
+      "webhookId": "your-webhook-id"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "produto",
+              "value": "={{ $json.body.produto || $json.body.descricao || '' }}"
+            },
+            {
+              "name": "codigo",
+              "value": "={{ $json.body.codigoBarras || '' }}"
+            },
+            {
+              "name": "codigo_Barras",
+              "value": "={{ $json.body.codigo || '' }}"
+            },
+            {
+              "name": "referencia",
+              "value": "={{ $json.body.referencia || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d4dc0324-9c94-4fe0-b951-cb8e1ae132e3",
+      "name": "Processar Dados de Entrada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://cdn-demander.s3.sa-east-1.amazonaws.com/processo-seletivo/exemplo-de-produtos.json",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "5dcdd0a9-84f5-4a0a-b648-57b474ab9a19",
+      "name": "Consultar API de Produtos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -592,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length || Object.keys($json).length }}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "id": "ea4b2eaf-b556-4c3c-acc8-4d57fdd6b309",
+      "name": "Verificar se API Retornou Sucesso",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resposta da API\nconst apiResponse = items[0].json;\nconst todosProdutos = Array.isArray(apiResponse) ? apiResponse : [];\n\nconsole.log(`Total de produtos recebidos da API: ${todosProdutos.length}`);\n\n// Dados da busca\nconst dadosBusca = $input.first().json;\nconst produtoReferencia = {\n  codigo: dadosBusca.codigo,\n  descricao: dadosBusca.descricao,\n  codigoBarras: dadosBusca.codigoBarras,\n  referencia: dadosBusca.referencia\n};\n\nconsole.log('Produto de referência:', produtoReferencia);\n\n// Função para calcular similaridade\nfunction calcularSimilaridade(produtoRef, produto) {\n  let score = 0;\n\n  if (produtoRef.codigo && produto.codigo === produtoRef.codigo) return 1.0;\n  if (produtoRef.codigoBarras && produto.codigoBarras === produtoRef.codigoBarras) return 1.0;\n\n  if (produtoRef.descricao && produto.descricao) {\n    const desc1 = produtoRef.descricao.toLowerCase().trim();\n    const desc2 = produto.descricao.toLowerCase().trim();\n\n    if (desc1 === desc2) return 0.95;\n    if (desc2.includes(desc1) || desc1.includes(desc2)) {\n      score += 0.8;\n    } else {\n      const palavras1 = desc1.split(/\\s+/).filter(p => p.length > 2);\n      const palavras2 = desc2.split(/\\s+/).filter(p => p.length > 2);\n\n      if (palavras1.length > 0 && palavras2.length > 0) {\n        const comuns = palavras1.filter(p1 =>\n          palavras2.some(p2 => p2.includes(p1) || p1.includes(p2))\n        );\n        const scorePalavras = comuns.length / Math.max(palavras1.length, palavras2.length);\n        score += scorePalavras * 0.7;\n      }\n    }\n  }\n\n  if (produtoRef.codigoBarras && produto.codigoBarras &&\n      produtoRef.codigoBarras.substring(0,6) === produto.codigoBarras.substring(0,6)) {\n    score += 0.15;\n  }\n\n  if (produtoRef.referencia && produto.referencia && produtoRef.referencia === produto.referencia) {\n    score += 0.1;\n  }\n\n  return Math.min(score, 1.0);\n}\n\n// Match exato (antes da filtragem por similaridade)\nconst matchExato = todosProdutos.find(produto =>\n  (produto.codigo && produto.codigo === produtoReferencia.codigo) ||\n  (produto.codigoBarras && produto.codigoBarras === produtoReferencia.codigoBarras) ||\n  (produto.descricao && produto.descricao.toLowerCase().trim() === produtoReferencia.descricao?.toLowerCase().trim())\n);\n\n// Calcular similaridade\nconst produtosComScore = todosProdutos.map(produto => ({\n  ...produto,\n  similaridade: calcularSimilaridade(produtoReferencia, produto)\n}));\n\n// Filtrar por similaridade\nconst produtosSimilares = produtosComScore\n  .filter(produto => produto.similaridade >= 0.3)\n  .sort((a, b) => b.similaridade - a.similaridade)\n  .slice(0, 50);\n\n// Adicionar match exato no topo se ainda não estiver\nif (matchExato && !produtosSimilares.find(p => p.codigo === matchExato.codigo)) {\n  produtosSimilares.unshift({\n    ...matchExato,\n    similaridade: 1.0\n  });\n}\n\nconst resultado = {\n  total_encontrados: produtosSimilares.length,\n  total_produtos_api: todosProdutos.length,\n  produto_referencia: produtoReferencia.descricao || produtoReferencia.codigo || 'Não especificado',\n  criterios_busca: {\n    codigo: produtoReferencia.codigo || null,\n    descricao: produtoReferencia.descricao || null,\n    codigoBarras: produtoReferencia.codigoBarras || null,\n    referencia: produtoReferencia.referencia || null\n  },\n  produtos_similares: produtosSimilares.map(produto => ({\n    codigo: produto.codigo,\n    descricao: produto.descricao,\n    codigoBarras: produto.codigoBarras,\n    referencia: produto.referencia,\n    score_similaridade: Math.round(produto.similaridade * 100) / 100\n  }))\n};\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "13ad7e28-5ac6-4b7c-9b78-59cb7938a4f0",
+      "name": "Processar Produtos Similares",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "erro",
+              "value": "Erro ao consultar API de produtos"
+            },
+            {
+              "name": "detalhes",
+              "value": "={{ $json.error || 'API não retornou dados válidos' }}"
+            },
+            {
+              "name": "status_code",
+              "value": "={{ $json.statusCode || 500 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dada12a2-bda5-43bd-bef4-2eeadc18c8b9",
+      "name": "Tratar Erro da API",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "29c441e7-5527-441f-96f2-b815665acead",
+      "name": "Response Hook - Sucesso",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        80,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "bf89060d-1000-4142-95e0-28ee9d081e2a",
+      "name": "Response Hook - Erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        80,
+        1168
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Receber Dados": {
+      "main": [
+        [
+          {
+            "node": "Processar Dados de Entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Dados de Entrada": {
+      "main": [
+        [
+          {
+            "node": "Consultar API de Produtos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar API de Produtos": {
+      "main": [
+        [
+          {
+            "node": "Verificar se API Retornou Sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar se API Retornou Sucesso": {
+      "main": [
+        [
+          {
+            "node": "Processar Produtos Similares",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tratar Erro da API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Produtos Similares": {
+      "main": [
+        [
+          {
+            "node": "Response Hook - Sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tratar Erro da API": {
+      "main": [
+        [
+          {
+            "node": "Response Hook - Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "13541327-839f-40b6-94d9-d25a300783b4",
+  "meta": {
+    "instanceId": "6073e951632a136c040206a202b40489b79cd18ee36d16c569c142c4a26c8867"
+  },
+  "id": "ALhEVZn5HwdnKH5E",
+  "tags": []
+}
