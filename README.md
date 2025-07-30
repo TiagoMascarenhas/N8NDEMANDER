@@ -8,14 +8,6 @@ Este projeto implementa uma solução de busca de produtos através de webhooks 
 
 **API de Produtos:** `https://cdn-demander.s3.sa-east-1.amazonaws.com/processo-seletivo/exemplo-de-produtos.json`
 
-## 📁 Estrutura do Repositório
-
-```
-├── WORKFLOW SIMPLES FUNCIONANDO.json    # Versão básica (funcional)
-├── WORKFLOW (esta pegando somente 1 produto da api).json    # Versão avançada (com bug conhecido)
-└── README.md                            # Este arquivo
-```
-
 ## 🔧 Workflows Disponíveis
 
 ### 1. **Workflow Simples** (`WORKFLOW SIMPLES FUNCIONANDO.json`)
@@ -34,7 +26,7 @@ Este projeto implementa uma solução de busca de produtos através de webhooks 
 3. **Processar Final** - Aplica filtros e lógica de busca
 4. **Response** - Retorna resultado formatado
 
-### 2. **Workflow Avançado** (`WORKFLOW (esta pegando somente 1 produto da api).json`)
+### 2. **Workflow Avançado** (`WORKFLOW (esta pegando somente o 1 produto da api).json`)
 **Status:** ⚠️ **Com Bug Conhecido**
 
 **Características:**
@@ -62,18 +54,6 @@ Este projeto implementa uma solução de busca de produtos através de webhooks 
 4. Configure o webhook (ative o workflow)
 5. Teste com requisições POST
 
-### Exemplo de Requisição
-
-```bash
-curl -X POST http://seu-n8n.com/webhook/buscar-produtos \
-  -H "Content-Type: application/json" \
-  -d '{
-    "produto": "Smartphone",
-    "codigo": "123456",
-    "codigoBarras": "7891234567890",
-    "referencia": "REF-001"
-  }'
-```
 
 ### Parâmetros Aceitos
 
@@ -147,7 +127,7 @@ O workflow avançado implementa um sistema de pontuação baseado em:
 ## ⚠️ Problemas Conhecidos
 
 ### Workflow Avançado
-- **Bug:** Processando apenas 1 produto da API em vez do array completo
+- **Bug:** Processando apenas o 1 produto da API em vez do array completo
 - **Status:** Em investigação
 - **Workaround:** Use o Workflow Simples para produção
 
@@ -164,30 +144,6 @@ Nenhuma configuração especial necessária. Os workflows são self-contained.
 ### Webhook URL
 Após importar e ativar: `http://seu-n8n/webhook/buscar-produtos`
 
-## 🧪 Testes
-
-### Cenários de Teste Sugeridos
-
-1. **Busca por código exato**
-```json
-{"codigo": "12345"}
-```
-
-2. **Busca por descrição parcial**
-```json
-{"produto": "Smart"}
-```
-
-3. **Busca por código de barras**
-```json
-{"codigoBarras": "7891234567890"}
-```
-
-4. **Busca sem critérios** (deve retornar primeiros 10)
-```json
-{}
-```
-
 ## 📝 Desenvolvimento
 
 ### Logs e Debug
@@ -202,18 +158,7 @@ Após importar e ativar: `http://seu-n8n/webhook/buscar-produtos`
 - [ ] Sistema de rate limiting
 - [ ] Métricas de uso
 
-## 👨‍💻 Desenvolvido por
-
-**Processo Seletivo Demander**  
-*Implementação de API de busca de produtos com N8N*
 
 ---
 
-## 📞 Suporte
 
-Para dúvidas sobre implementação ou problemas encontrados, consulte:
-- Logs do N8N
-- Debug do workflow via interface N8N
-- Documentação oficial N8N
-
-**Recomendação:** Use o **Workflow Simples** para ambiente de produção até correção do bug no workflow avançado.
